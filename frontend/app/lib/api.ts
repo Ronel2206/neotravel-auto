@@ -1,13 +1,28 @@
 // Mettre ici l'URL du webhook n8n utilisé par le chatbot.
-const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
-function buildBackendUrl(path: string) {
+function buildBackendUrl(path: string): string {
 	if (!BACKEND_URL) {
-		return null;
+		throw new Error("NEXT_PUBLIC_BACKEND_URL is not configured.");
 	}
 
 	return `${BACKEND_URL.replace(/\/$/, "")}${path}`;
+}
+
+export async function sendChatPrompt(prompt: string): Promise<N8nChatResponse> {
+	const targetUrl = buildBackendUrl("/api/agent/chat");
+
+	const response = await fetch(targetUrl, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ message: prompt }),
+	});
+
+	if (!response.ok) {
+		throw new Error(`backend chat error: ${response.status}`);
+	}
+
+	return (await response.json()) as N8nChatResponse;
 }
 
 export type N8nChatResponse = {
@@ -87,27 +102,6 @@ function normalizeDashboardMetrics(payload: unknown): DashboardMetrics {
 		sparklineVolume: source.sparklineVolume?.length ? source.sparklineVolume : DEFAULT_DASHBOARD_METRICS.sparklineVolume,
 		sparklineConversion: source.sparklineConversion?.length ? source.sparklineConversion : DEFAULT_DASHBOARD_METRICS.sparklineConversion,
 	};
-}
-
-export async function sendChatPrompt(prompt: string): Promise<N8nChatResponse> {
-	const backendUrl = buildBackendUrl("/api/agent/chat");
-	const targetUrl = backendUrl ?? N8N_WEBHOOK_URL;
-
-	if (!targetUrl) {
-		throw new Error("NEXT_PUBLIC_BACKEND_URL or NEXT_PUBLIC_N8N_WEBHOOK_URL is not configured.");
-	}
-
-	const response = await fetch(targetUrl, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(backendUrl ? { message: prompt } : { prompt }),
-	});
-
-	if (!response.ok) {
-		throw new Error(`n8n error: ${response.status}`);
-	}
-
-	return (await response.json()) as N8nChatResponse;
 }
 
 export async function fetchDashboardMetrics(): Promise<DashboardMetrics | null> {
