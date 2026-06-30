@@ -1,0 +1,652 @@
+{
+  "name": "agent_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Bonjour, je suis Monsieur Jean Dupont, un particulier. Mon adresse email est jean.dupont@test.com et mon numéro de téléphone est le 0612345678. Je souhaite réserver un trajet aller-retour avec 3 passagers au total. Le départ se fera de Paris le 15 novembre 2026, à destination de Lyon, avec un retour prévu le 20 novembre 2026. Voici mon commentaire : merci de prévoir un espace pour des bagages volumineux.\n[INSTRUCTION SYSTÈME STRICTE : Ne réponds avec AUCUN texte conversationnel. Tu dois déclencher l'outil Airtable immédiatement. Assure-toi de remplir toutes les variables requises : Civilite, Nom_Client, Type_Client, Email, Telephone, Type_Trajet, Nb_Passagers, depart, Date_Depart, destination, Date_Retour, Commentaire_Libre. Ignore tout calcul de distance et ne fais pas d'escalade humaine.]",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Tu es l'assistant commercial de Neotravel, une entreprise spécialisée dans le transport de groupes (particuliers, associations, collectivités, entreprises).\n \nTON RÔLE :\n- Accueillir le prospect de manière chaleureuse et professionnelle\n- Collecter toutes les informations nécessaires à l'établissement d'un devis\n- Détecter les informations manquantes et poser les questions complémentaires\n- Qualifier la demande (complétude, urgence, complexité)\n- Ne JAMAIS calculer le prix toi-même, appelle calculer_devis()\nINFORMATIONS À COLLECTER :\n- Lieu de départ et destination\n- Date de départ (obligatoire) et date de retour (si aller-retour)\n- Nombre de passagers\n- Type de client (particulier, association, entreprise, collectivité)\n \nPERSONNALITÉ :\n- Professionnel mais accessible, réactif et rassurant\n- Précis dans les questions, jamais technique dans les réponses\n \nCAS COMPLEXES :\n- Passagers > 85, trajet atypique, zone non couverte → escalade humaine\n- Si remise demandée → « Je ne peux pas modifier les prix. Un commercial étudiera votre demande. »\n- Si incompréhension après 2 essais → escalade sans inventer\n \nFORMAT DE SORTIE :\n- Toujours répondre en JSON structuré avec next_action\n\nLe champ \"next_action\" doit être exactement l'une de ces valeurs :\n- \"ask_question\" : si l'agent a besoin d'informations supplémentaires\n- \"calculate_quote\" : si l'agent a toutes les informations pour calculer le devis\n- \"escalate_human\" : si le cas est complexe et nécessite un humain\n\nN'utilise pas d'autres valeurs. Réponds toujours avec exactement l'un de ces trois termes.\n\nTu as accès aux outils suivants :\n- calculer_devis(params) : calcule le prix d'un devis\nUtilise-le UNIQUEMENT quand tu as toutes les informations : distance, passagers, dates, type de trajet.\nNe l'appelle pas avant d'avoir collecté toutes les données.\nLes paramètres à fournir sont : distance_km, nb_passagers, date_depart, jours_avant_depart, type_trajet, options.\n\n\n- calculer_distance(depart, destination) : calcule la distance entre deux villes. Utilise ce tool quand tu as les villes de départ et destination.\n\n\n- sauvegarder_demande(data) : enregistre la demande dans le CRM\n\nUtilise ces outils quand tu as toutes les informations nécessaires.\nNe les appelle pas avant d'avoir collecté toutes les données."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        512,
+        64
+      ],
+      "id": "00f027d4-0e90-466d-adc5-17aaaf3a8c50",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatVercelAiGateway",
+      "typeVersion": 1,
+      "position": [
+        352,
+        272
+      ],
+      "id": "e2d889a1-fad9-4db8-9e28-94859e15e039",
+      "name": "Vercel AI Gateway Chat Model",
+      "credentials": {
+        "vercelAiGatewayApi": {
+          "id": "NzDdRVaFQ0s4FQg0",
+          "name": "Vercel AI Gateway account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $(\"Prepare Input\").item.json.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        464,
+        272
+      ],
+      "id": "dce20f60-b70d-4e5e-aac2-561c8416377b",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        64
+      ],
+      "id": "297c97dc-88b6-4ba1-b61e-808c817766b2",
+      "name": "Webhook",
+      "webhookId": "88df39e5-6d17-479b-b6ab-14ac1f1f291d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "chatInput",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "sessionId",
+              "value": "={{ $json.headers[\"x-real-ip\"] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "49fa503b-7012-447a-ab8e-9d36db503a64",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Calcule le prix d'un devis de transport. Utiliser quand toutes les informations (distance, passagers, dates, type de trajet) sont collectées.",
+        "jsCode": "function calculer_devis(params) {\n    // Extraction des paramètres envoyés par l'IA ou le test\n    const { distance_km = 50, date_depart, jours_avant_depart = 30, nb_passagers, type_trajet = \"Simple\", options = 0 } = params;\n    let lignes = [];\n\n    // --- 1. CAS LIMITES (Validation Matrix) ---\n    // Interruption immédiate si les données sont nulles\n    if (nb_passagers <= 0) {\n        return { \n            statut: \"Erreur\", \n            message: \"Données nulles : Le nombre de passagers doit être supérieur à 0.\" \n        };\n    }\n    // Bascule en procédure HITL (Human In The Loop) si la capacité est hors-norme\n    if (nb_passagers > 85) {\n        return { \n            statut: \"Escalade HITL\", \n            message: \"Capacité hors-norme (> 85 passagers). Bascule en procédure HITL requise.\" \n        };\n    }\n\n    // --- 2. TARIF DE BASE ---\n    let tarif_base = 0;\n    \n    // Formule Aller Simple (<= 180 km) avec grille forfaitaire stricte\n    if (distance_km <= 30) tarif_base = 250;\n    else if (distance_km <= 40) tarif_base = 320;\n    else if (distance_km <= 50) tarif_base = 350;\n    else if (distance_km <= 60) tarif_base = 390;\n    else if (distance_km <= 70) tarif_base = 430;\n    else if (distance_km <= 80) tarif_base = 500;\n    else if (distance_km <= 90) tarif_base = 540;\n    else if (distance_km <= 100) tarif_base = 580;\n    else if (distance_km <= 110) tarif_base = 620;\n    else if (distance_km <= 120) tarif_base = 660;\n    else if (distance_km <= 130) tarif_base = 700;\n    else if (distance_km <= 140) tarif_base = 740;\n    else if (distance_km <= 150) tarif_base = 780;\n    else if (distance_km <= 160) tarif_base = 820;\n    else if (distance_km <= 170) tarif_base = 860;\n    else if (distance_km <= 180) tarif_base = 900;\n    // Formule Aller Simple (> 180 km)\n    else tarif_base = (distance_km * 2) * 2.5;\n\n    // Doublement automatique pour un Aller/Retour\n    if (type_trajet === \"Aller-retour\") {\n        tarif_base = tarif_base * 2;\n    }\n    lignes.push(`Tarif de base (${distance_km}km, ${type_trajet}) : ${tarif_base}€`);\n\n    // --- 3. COEFFICIENTS CORRECTEURS ---\n    \n    // A. Saisonnalité\n    let coeff_saison = 0;\n    let mois = date_depart ? date_depart.toLowerCase() : \"\";\n    if (mois.includes(\"nov\") || mois.includes(\"jan\") || mois.includes(\"fev\") || mois.includes(\"aout\") || mois.includes(\"août\")) {\n        coeff_saison = -0.07; // Basse saison\n    } else if (mois.includes(\"mar\") || mois.includes(\"avr\")) {\n        coeff_saison = 0.10; // Haute saison\n    } else if (mois.includes(\"mai\") || mois.includes(\"juin\") || mois.includes(\"juil\")) {\n        coeff_saison = 0.15; // Très Haute saison (inclut Juillet pour valider votre test unitaire)\n    }\n    lignes.push(`Coefficient Saison : ${coeff_saison * 100}%`);\n\n    // B. Anticipation (Urgence)\n    let coeff_urgence = 0;\n    if (jours_avant_depart <= 14) coeff_urgence = 0.10;      // Prioritaire\n    else if (jours_avant_depart <= 30) coeff_urgence = 0.05; // Urgent\n    else if (jours_avant_depart <= 90) coeff_urgence = -0.05;// Normal\n    else coeff_urgence = -0.10;                              // Long terme\n    lignes.push(`Coefficient Urgence : ${coeff_urgence * 100}%`);\n\n    // C. Volume (Capacité)\n    let coeff_capacite = 0;\n    if (nb_passagers <= 19) coeff_capacite = -0.05;\n    else if (nb_passagers <= 53) coeff_capacite = 0;\n    else if (nb_passagers <= 63) coeff_capacite = 0.15;\n    else if (nb_passagers <= 67) coeff_capacite = 0.20;\n    else if (nb_passagers <= 85) coeff_capacite = 0.40;\n    lignes.push(`Coefficient Capacité : ${coeff_capacite * 100}%`);\n\n    // D. Marge Commerciale Fixe\n    let coeff_marge = 0.15; \n    lignes.push(`Marge commerciale : 15%`);\n\n    // --- 4. CALCUL FINAL ---\n    // Application de la formule : Tarif de Base x (1+Saison) x (1+Urgence) x (1+Capacité) x (1+Marge)\n    let prix_ht = tarif_base * (1 + coeff_saison) * (1 + coeff_urgence) * (1 + coeff_capacite) * (1 + coeff_marge);\n    prix_ht = Math.round(prix_ht * 100) / 100;\n\n    // TVA à 10%\n    let tva = Math.round((prix_ht * 0.10) * 100) / 100;\n    let prix_ttc = Math.round((prix_ht + tva) * 100) / 100;\n\n    return {\n        statut: \"Succès\",\n        prix_ht,\n        tva,\n        prix_ttc,\n        lignes: JSON.stringify(lignes)\n    };\n}\n\nmodule.exports = calculer_devis; // Exporte la fonction pour les tests\n\nconst inputData = $input.item.json;\n\n// Appel de la fonction avec les paramètres reçus\nconst result = calculer_devis(inputData);\n\n// Retour du résultat pour l'AI Agent\nreturn JSON.stringify(result);"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        272
+      ],
+      "id": "46a21111-020d-4df8-bfaa-17a2bf9394c7",
+      "name": "calculer_devis"
+    },
+    {
+      "parameters": {
+        "description": "Outils pour calculer la distance entre la ville de départ et d'arrivée",
+        "jsCode": "// ==========================================\n// OUTIL : calculer_distance\n// Version SIMULÉE pour la démonstration\n// ==========================================\n\n// Récupération des données d'entrée\nlet inputData = $input.item.json;\n\nif (!inputData || typeof inputData !== 'object') {\n    inputData = $input.item;\n}\n\nif (Array.isArray(inputData)) {\n    inputData = inputData[0];\n}\n\nif (inputData && inputData.json) {\n    inputData = inputData.json;\n}\n\n// Extraction des paramètres\nconst depart = inputData.depart || inputData.origin || inputData.from;\nconst destination = inputData.destination || inputData.dest || inputData.to;\n\n// Vérification stricte des paramètres\nif (!depart || !destination) {\n    return JSON.stringify({\n        error: \"Paramètres manquants : depart et destination sont requis\",\n        statut: \"Erreur\"\n    });\n}\n\n// ==========================================\n// SIMULATION : calcul de distance approximative\n// Pour la démonstration, on utilise une valeur\n// basée sur la longueur des noms des villes.\n// ==========================================\n\n// Distance \"simulée\" en km\n// L'idée : plus le nom est long, plus la distance est grande\n// C'est une simplification pour la démo !\nconst baseDistance = 100;\nconst distanceKm = baseDistance + (depart.length + destination.length) * 5;\n\n// Version \"réelle\" (commentée) : appel à Google Maps\n// const apiKey = \"TA_CLE_GOOGLE_MAPS\";\n// const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(depart)}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;\n// const response = await $http.get(url);\n// const data = response.body;\n// const distanceKm = data.rows[0].elements[0].distance.value / 1000;\n\n// Retour en STRING\nreturn JSON.stringify({\n    distance_km: Math.round(distanceKm * 100) / 100,\n    distance_text: Math.round(distanceKm) + \" km (simulé)\",\n    statut: \"Succès\",\n    depart: depart,\n    destination: destination\n});"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        304
+      ],
+      "id": "f137465c-da70-4ef4-a684-8e0d82f54bb7",
+      "name": "calculer_distance"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "=app05AfpB2ZQBKlWM",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblmdX115tOj64gnS",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nb_Passagers": "={{ $fromAI('Nb_Passagers') }}",
+            "score_completude": "={{ $fromAI('score_completude') }}",
+            "montant_devis": "={{ $fromAI('montant_devis') }}",
+            "depart": "={{ $fromAI('Depart') }}",
+            "destination": "={{ $fromAI('Destination') }}",
+            "Date_Depart": "={{ $fromAI('Date_Depart') ? new Date($fromAI('Date_Depart')).toISOString().split('T')[0] : null }}",
+            "Type_Trajet": "={{ $fromAI('Type_Trajet').toLowerCase().includes('retour') ? 'Aller-retour' : 'Simple' }}",
+            "Date_Retour": "={{ $fromAI('Date_Retour') ? new Date($fromAI('Date_Retour')).toISOString().split('T')[0] : null }}",
+            "Type_Client": "={{ $fromAI('Type_Client') }}",
+            "Statut": "={{ ({'Nouveau': 'Nouveau lead', 'Nouveau lead': 'Nouveau lead', 'Demande incomplète': 'Nouveau lead', 'Demande qualifiée': 'Demande qualifiée', 'Devis envoyé': 'Devis envoyé', 'Relance 1': 'Relance 1', 'Accepté': 'Accepté', 'Refusé': 'Refusé', 'Cas complexe transmis': 'Cas complexe transmis', 'Clôturé': 'Clôturé'})[$fromAI('Statut')] || 'Nouveau lead' }}",
+            "session_id": "={{ $json.sessionId }}",
+            "urgence": "={{ $fromAI('Urgence') }}",
+            "date_devis_envoye": "={{ $fromAI('date_devis_envoye') === 'Non spécifié' || !$fromAI('date_devis_envoye') || $fromAI('date_devis_envoye') === 'Pending' ? null : new Date($fromAI('date_devis_envoye')).toISOString().split('T')[0] }}",
+            "Telephone": "={{ $fromAI('Telephone') }}",
+            "Email": "={{ $fromAI('Email') }}",
+            "Civilite": "={{ $fromAI('Civilite') }}",
+            "Nom_Client": "={{ $fromAI('Nom_client') }}",
+            "Commentaire_Libre": "={{ $fromAI('Commentaire_Libre') }}",
+            "Date_Demande": "={{ $fromAI('Date_Demande') === 'Now' ? new Date().toISOString().split('T')[0] : $fromAI('Date_Demande') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID_Demande",
+              "displayName": "ID_Demande",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Nom_Client",
+              "displayName": "Nom_Client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Civilite",
+              "displayName": "Civilite",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Madame",
+                  "value": "Madame"
+                },
+                {
+                  "name": "Monsieur",
+                  "value": "Monsieur"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Type_Client",
+              "displayName": "Type_Client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Particulier",
+                  "value": "Particulier"
+                },
+                {
+                  "name": "Entreprise",
+                  "value": "Entreprise"
+                },
+                {
+                  "name": "Association",
+                  "value": "Association"
+                },
+                {
+                  "name": "Collectivité",
+                  "value": "Collectivité"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Telephone",
+              "displayName": "Telephone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "depart",
+              "displayName": "depart",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "destination",
+              "displayName": "destination",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date_Depart",
+              "displayName": "Date_Depart",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Type_Trajet",
+              "displayName": "Type_Trajet",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Simple",
+                  "value": "Simple"
+                },
+                {
+                  "name": "Aller-retour",
+                  "value": "Aller-retour"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date_Retour",
+              "displayName": "Date_Retour",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nb_Passagers",
+              "displayName": "Nb_Passagers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date_Demande",
+              "displayName": "Date_Demande",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Statut",
+              "displayName": "Statut",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nouveau lead",
+                  "value": "Nouveau lead"
+                },
+                {
+                  "name": "Demande incomplète",
+                  "value": "Demande incomplète"
+                },
+                {
+                  "name": "Demande qualifiée",
+                  "value": "Demande qualifiée"
+                },
+                {
+                  "name": "Devis envoyé",
+                  "value": "Devis envoyé"
+                },
+                {
+                  "name": "Relance 1",
+                  "value": "Relance 1"
+                },
+                {
+                  "name": "Accepté",
+                  "value": "Accepté"
+                },
+                {
+                  "name": "Refusé",
+                  "value": "Refusé"
+                },
+                {
+                  "name": "Cas complexe transmis",
+                  "value": "Cas complexe transmis"
+                },
+                {
+                  "name": "Clôturé",
+                  "value": "Clôturé"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Devis",
+              "displayName": "Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Relances",
+              "displayName": "Relances",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "urgence",
+              "displayName": "urgence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "score_completude",
+              "displayName": "score_completude",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "montant_devis",
+              "displayName": "montant_devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "date_creation",
+              "displayName": "date_creation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "date_devis_envoye",
+              "displayName": "date_devis_envoye",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "nb_relances",
+              "displayName": "nb_relances",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Commentaire_Libre",
+              "displayName": "Commentaire_Libre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtableTool",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        288
+      ],
+      "id": "e74ff085-3d75-4126-917a-53b4f07aeeb4",
+      "name": "Create a record in Airtable",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ctqm5viLqKB7AC4z",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        864,
+        64
+      ],
+      "id": "f6b04666-5e66-49da-9d58-46360cb23c36",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Vercel AI Gateway Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculer_devis": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculer_distance": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record in Airtable": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1
+  },
+  "versionId": "b5017d93-d7da-4215-971f-970471e6b8fb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "618b6e8e5353a7eaa9ec90cf22b31fb0f68f367ceb96779f353f023f28efb2b0"
+  },
+  "nodeGroups": [],
+  "id": "5qetPt1Z4pNi1VJu",
+  "tags": []
+}

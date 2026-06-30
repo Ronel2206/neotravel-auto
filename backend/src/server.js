@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Import du moteur de pricing (Christen)
-const { calculerDevis } = require('./pricing/calculer_devis');
+const calculerDevis = require('./pricing/calculer_devis');
 
 // Route : calculer un devis
 app.post('/api/pricing/calculate', (req, res) => {
@@ -26,13 +26,14 @@ app.post('/api/pricing/calculate', (req, res) => {
 });
 
 // Route : statut de l'agent (Ronel)
+console.log("✅ Enregistrement de la route /api/agent/chat");
 app.post('/api/agent/chat', async (req, res) => {
   const webhook = process.env.N8N_CHAT_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL;
   if (!webhook) {
     return res.status(404).json({ error: 'N8N chat webhook not configured on server.' });
   }
 
-  let fetcher = global.fetch;
+  let fetcher = global.fetch || require('node-fetch');
   if (!fetcher) {
     try {
       fetcher = require('node-fetch');
